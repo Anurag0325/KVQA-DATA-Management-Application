@@ -9,6 +9,9 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from email.message import EmailMessage
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -26,7 +29,7 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 SMTP_SERVER = 'smtp.gmail.com'
 SMTP_PORT = 587  # 465  # SSL Port
 SMTP_USERNAME = 'akanuragkumar75@gmail.com'  # Replace with your email
-SMTP_PASSWORD = 'gersqaguuxkhotwt'  # Replace with your email password
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
 
 
 def insert_dummy_data():
