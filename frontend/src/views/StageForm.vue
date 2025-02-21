@@ -286,7 +286,8 @@
     const token = localStorage.getItem("token"); // Adjust if using Vuex
 
     try {
-        const response = await axios.post("http://127.0.0.1:5000/stage1", formData, {
+        // const response = await axios.post("http://127.0.0.1:5000/stage1", formData, {
+        const response = await axios.post("https://kvqa-data-management-application.onrender.com/stage1", formData, {
             headers: { 
                 "Content-Type": "multipart/form-data",
                 "Authorization": `Bearer ${token}` // Attach JWT token
