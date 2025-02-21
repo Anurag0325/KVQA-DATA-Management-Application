@@ -1,0 +1,661 @@
+Backend Folder Structure
+
+backend/
+├── app.py
+├── models.py
+├── config.py
+├── utils.py
+└── requirements.txt
+
+requiremets.txt
+Flask==2.3.2
+Flask-JWT-Extended==4.4.4
+Flask-Cors==3.0.10
+Flask-SQLAlchemy==3.0.3
+mysql-connector-python==8.0.32
+
+
+config.py
+import os
+
+class Config:
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'your_secret_key'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'mysql+mysqlconnector://user:password@localhost/yourdatabase'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'your_jwt_secret_key'
+
+
+models.py
+
+from flask_sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+    role = db.Column(db.String(20), default='user')
+
+class Incident(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    description = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(50), default='open')
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+class DataSubjectRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    request_type = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(50), default='pending')
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    message = db.Column(db.String(255), nullable=False)
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+app.py
+
+from flask import Flask, jsonify, request
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+from models import db, User, Incident, DataSubjectRequest, Notification
+import os
+
+app = Flask(__name__)
+app.config.from_object('config.Config')
+db.init_app(app)
+jwt = JWTManager(app)
+CORS(app)
+
+# Initialize database
+with app.app_context():
+    db.create_all()
+
+@app.route('/auth/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    hashed_password = generate_password_hash(data['password'], method='sha256')
+    new_user = User(username=data['username'], password=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({'message': 'Registered successfully'}), 201
+
+@app.route('/auth/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    user = User.query.filter_by(username=data['username']).first()
+    if not user or not check_password_hash(user.password, data['password']):
+        return jsonify({'message': 'Invalid credentials'}), 401
+    access_token = create_access_token(identity={'username': user.username, 'role': user.role})
+    return jsonify({'token': access_token}), 200
+
+@app.route('/compliance/status', methods=['GET'])
+@jwt_required()
+def compliance_status():
+    return jsonify({'status': 'Compliant', 'incidents_open': Incident.query.filter_by(status='open').count()}), 200
+
+@app.route('/incidents', methods=['POST', 'GET'])
+@jwt_required()
+def incidents():
+    if request.method == 'POST':
+        data = request.get_json()
+        new_incident = Incident(description=data['description'])
+        db.session.add(new_incident)
+        db.session.commit()
+        return jsonify({'message': 'Incident logged'}), 201
+    elif request.method == 'GET':
+        incidents = Incident.query.all()
+        return jsonify([{'id': inc.id, 'description': inc.description, 'status': inc.status} for inc in incidents]), 200
+
+@app.route('/dsr', methods=['POST', 'GET'])
+@jwt_required()
+def data_subject_requests():
+    current_user = get_jwt_identity()
+    if request.method == 'POST':
+        data = request.get_json()
+        new_request = DataSubjectRequest(user_id=current_user['id'], request_type=data['request_type'])
+        db.session.add(new_request)
+        db.session.commit()
+        return jsonify({'message': 'Request submitted'}), 201
+    elif request.method == 'GET':
+        dsrs = DataSubjectRequest.query.filter_by(user_id=current_user['id']).all()
+        return jsonify([{'id': dsr.id, 'request_type': dsr.request_type, 'status': dsr.status} for dsr in dsrs]), 200
+
+@app.route('/notifications', methods=['GET'])
+@jwt_required()
+def notifications():
+    current_user = get_jwt_identity()
+    notifications = Notification.query.filter_by(user_id=current_user['id']).all()
+    return jsonify([{'id': n.id, 'message': n.message, 'is_read': n.is_read} for n in notifications]), 200
+
+@app.route('/notifications/mark-read', methods=['POST'])
+@jwt_required()
+def mark_notifications_read():
+    current_user = get_jwt_identity()
+    notifications = Notification.query.filter_by(user_id=current_user['id'], is_read=False).all()
+    for notification in notifications:
+        notification.is_read = True
+    db.session.commit()
+    return jsonify({'message': 'Notifications marked as read'}), 200
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+
+Key Functionalities Covered
+User Management:
+
+Register and login with JWT authentication.
+Different roles for different levels of access.
+Compliance Dashboard:
+
+Compliance status overview.
+List and manage incidents.
+Incident Management:
+
+Create and fetch incidents.
+Data Subject Requests:
+
+Submit and list data subject requests.
+Notifications:
+
+Fetch notifications and mark them as read.
+Notes
+Database Models: The models are basic and need further attributes based on detailed requirements.
+Security: JWT is used for securing API endpoints.
+Scalability: More endpoints and features can be added based on specific needs.
+This skeleton covers the basic requirements. For a production-ready system, consider adding more advanced features like:
+
+Role-based access control.
+Detailed error handling and logging.
+Paginated and filtered API responses.
+Background jobs for long-running tasks (e.g., reporting).
+
+
+***************************************************Frontend***********************************************************
+
+Frontend Folder Structure
+
+frontend/
+├── public/
+│   └── index.html
+├── src/
+│   ├── components/
+│   │   ├── IncidentList.vue
+│   │   ├── Register.vue
+│   │   ├── Login.vue
+│   │   ├── ComplianceStatus.vue
+│   │   └── Notifications.vue
+│   ├── App.vue
+│   ├── main.js
+│   └── router.js
+└── package.json
+
+
+package.json
+
+{
+  "name": "dpo-dashboard",
+  "version": "1.0.0",
+  "scripts": {
+    "serve": "vue-cli-service serve",
+    "build": "vue-cli-service build"
+  },
+  "dependencies": {
+    "core-js": "^3.6.5",
+    "vue": "^3.2.0",
+    "vue-router": "^4.0.0"
+  },
+  "devDependencies": {
+    "@vue/cli-service": "~5.0.0"
+  }
+}
+
+
+main.js
+
+import { createApp } from 'vue';
+import App from './App.vue';
+import router from './router';
+
+createApp(App).use(router).mount('#app');
+
+
+router.js
+
+import { createRouter, createWebHistory } from 'vue-router';
+import Register from './components/Register.vue';
+import Login from './components/Login.vue';
+import IncidentList from './components/IncidentList.vue';
+import ComplianceStatus from './components/ComplianceStatus.vue';
+import Notifications from './components/Notifications.vue';
+
+const routes = [
+  { path: '/register', component: Register },
+  { path: '/login', component: Login },
+  { path: '/incidents', component: IncidentList },
+  { path: '/compliance', component: ComplianceStatus },
+  { path: '/notifications', component: Notifications },
+];
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes,
+});
+
+export default router;
+
+
+App.vue
+
+<template>
+  <div id="app">
+    <router-view></router-view>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'App',
+};
+</script>
+
+
+Components/register.vue
+
+<template>
+  <div>
+    <h2>Register</h2>
+    <form @submit.prevent="register">
+      <input v-model="username" placeholder="Username" required />
+      <input v-model="password" type="password" placeholder="Password" required />
+      <button type="submit">Register</button>
+    </form>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      username: '',
+      password: '',
+    };
+  },
+  methods: {
+    async register() {
+      const response = await fetch('/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: this.username, password: this.password }),
+      });
+      if (response.ok) {
+        alert('Registration successful');
+      } else {
+        alert('Registration failed');
+      }
+    },
+  },
+};
+</script>
+
+
+Components/Login.vue
+
+<template>
+  <div>
+    <h2>Register</h2>
+    <form @submit.prevent="register">
+      <input v-model="username" placeholder="Username" required />
+      <input v-model="password" type="password" placeholder="Password" required />
+      <button type="submit">Register</button>
+    </form>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      username: '',
+      password: '',
+    };
+  },
+  methods: {
+    async register() {
+      const response = await fetch('/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: this.username, password: this.password }),
+      });
+      if (response.ok) {
+        alert('Registration successful');
+      } else {
+        alert('Registration failed');
+      }
+    },
+  },
+};
+</script>
+
+
+Components/incidentlist.vue
+
+<template>
+  <div>
+    <h2>Incidents</h2>
+    <ul>
+      <li v-for="incident in incidents" :key="incident.id">{{ incident.description }} - {{ incident.status }}</li>
+    </ul>
+    <form @submit.prevent="addIncident">
+      <input v-model="description" placeholder="Incident description" required />
+      <button type="submit">Log Incident</button>
+    </form>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      incidents: [],
+      description: '',
+    };
+  },
+  async mounted() {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/incidents', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.ok) {
+      this.incidents = await response.json();
+    }
+  },
+  methods: {
+    async addIncident() {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/incidents', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ description: this.description }),
+      });
+      if (response.ok) {
+        this.incidents.push(await response.json());
+      }
+    },
+  },
+};
+</script>
+
+
+Components/compliancestatus.vue
+
+<template>
+  <div>
+    <h2>Compliance Status</h2>
+    <p>{{ status }}</p>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      status: '',
+    };
+  },
+  async mounted() {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/compliance/status', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      this.status = `Status: ${data.status}, Open Incidents: ${data.incidents_open}`;
+    }
+  },
+};
+</script>
+
+
+Components/Notifications.vue
+
+<template>
+  <div>
+    <h2>Notifications</h2>
+    <ul>
+      <li v-for="notification in notifications" :key="notification.id">
+        {{ notification.message }} - {{ notification.is_read ? 'Read' : 'Unread' }}
+      </li>
+    </ul>
+    <button @click="markRead">Mark All as Read</button>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      notifications: [],
+    };
+  },
+  async mounted() {
+    const token = localStorage.getItem('token');
+    const response = await fetch('/notifications', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.ok) {
+      this.notifications = await response.json();
+    }
+  },
+  methods: {
+    async markRead() {
+      const token = localStorage.getItem('token');
+      await fetch('/notifications/mark-read', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      this.notifications = this.notifications.map((n) => ({ ...n, is_read: true }));
+    },
+  },
+};
+</script>
+
+
+Notes
+Authentication Token Handling: The token is stored in localStorage and included in headers for protected routes.
+Forms and Fetch: Forms use the fetch API to communicate with the backend.
+Navigation: vue-router handles navigation between pages.
+Simplified State Management: Direct data properties and methods manage the application state.
+This setup provides a good starting point for a DPO Dashboard frontend. You can expand it by adding more components for 
+advanced functionalities like reports, user profile management, and data subject request handling.
+
+
+
+*****************************************************Dummy Website**************************************************
+
+Folder Structure
+
+
+dummy-website/
+├── index.html
+└── script.js
+
+
+
+index.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DPO Dashboard Dummy Website</title>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <h1>DPO Dashboard Dummy Website</h1>
+
+    <h2>Register</h2>
+    <form id="register-form">
+        <input type="text" id="register-username" placeholder="Username" required />
+        <input type="password" id="register-password" placeholder="Password" required />
+        <button type="submit">Register</button>
+    </form>
+
+    <h2>Login</h2>
+    <form id="login-form">
+        <input type="text" id="login-username" placeholder="Username" required />
+        <input type="password" id="login-password" placeholder="Password" required />
+        <button type="submit">Login</button>
+    </form>
+
+    <h2>Log Incident</h2>
+    <form id="incident-form">
+        <input type="text" id="incident-description" placeholder="Incident description" required />
+        <button type="submit">Log Incident</button>
+    </form>
+
+    <h2>View Incidents</h2>
+    <button id="view-incidents">View Incidents</button>
+    <ul id="incident-list"></ul>
+
+    <h2>Compliance Status</h2>
+    <button id="view-compliance-status">View Compliance Status</button>
+    <p id="compliance-status"></p>
+
+    <h2>Notifications</h2>
+    <button id="view-notifications">View Notifications</button>
+    <ul id="notification-list"></ul>
+</body>
+</html>
+
+
+script.js
+
+const apiUrl = 'http://localhost:5000'; // Change this to your backend URL if needed
+let authToken = '';
+
+document.getElementById('register-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const username = document.getElementById('register-username').value;
+    const password = document.getElementById('register-password').value;
+
+    const response = await fetch(`${apiUrl}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+    });
+
+    if (response.ok) {
+        alert('Registration successful!');
+    } else {
+        alert('Registration failed.');
+    }
+});
+
+document.getElementById('login-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const username = document.getElementById('login-username').value;
+    const password = document.getElementById('login-password').value;
+
+    const response = await fetch(`${apiUrl}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+    });
+
+    if (response.ok) {
+        const data = await response.json();
+        authToken = data.token; // Save the token for future requests
+        alert('Login successful!');
+    } else {
+        alert('Login failed.');
+    }
+});
+
+document.getElementById('incident-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const description = document.getElementById('incident-description').value;
+
+    const response = await fetch(`${apiUrl}/incidents`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ description }),
+    });
+
+    if (response.ok) {
+        alert('Incident logged successfully!');
+    } else {
+        alert('Failed to log incident.');
+    }
+});
+
+document.getElementById('view-incidents').addEventListener('click', async () => {
+    const response = await fetch(`${apiUrl}/incidents`, {
+        headers: {
+            Authorization: `Bearer ${authToken}`,
+        },
+    });
+
+    if (response.ok) {
+        const incidents = await response.json();
+        const incidentList = document.getElementById('incident-list');
+        incidentList.innerHTML = ''; // Clear the list
+        incidents.forEach(incident => {
+            const li = document.createElement('li');
+            li.textContent = `${incident.description} - ${incident.status}`;
+            incidentList.appendChild(li);
+        });
+    } else {
+        alert('Failed to fetch incidents.');
+    }
+});
+
+document.getElementById('view-compliance-status').addEventListener('click', async () => {
+    const response = await fetch(`${apiUrl}/compliance/status`, {
+        headers: {
+            Authorization: `Bearer ${authToken}`,
+        },
+    });
+
+    if (response.ok) {
+        const data = await response.json();
+        document.getElementById('compliance-status').textContent = `Status: ${data.status}, Open Incidents: ${data.incidents_open}`;
+    } else {
+        alert('Failed to fetch compliance status.');
+    }
+});
+
+document.getElementById('view-notifications').addEventListener('click', async () => {
+    const response = await fetch(`${apiUrl}/notifications`, {
+        headers: {
+            Authorization: `Bearer ${authToken}`,
+        },
+    });
+
+    if (response.ok) {
+        const notifications = await response.json();
+        const notificationList = document.getElementById('notification-list');
+        notificationList.innerHTML = ''; // Clear the list
+        notifications.forEach(notification => {
+            const li = document.createElement('li');
+            li.textContent = `${notification.message} - ${notification.is_read ? 'Read' : 'Unread'}`;
+            notificationList.appendChild(li);
+        });
+    } else {
+        alert('Failed to fetch notifications.');
+    }
+});
