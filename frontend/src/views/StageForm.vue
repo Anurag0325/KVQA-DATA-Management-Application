@@ -337,7 +337,8 @@
             emailData.append("attachments", this.additionaldata);
 
             try {
-                const response = await axios.post("http://127.0.0.1:5000/send-email", emailData, {
+                // const response = await axios.post("http://127.0.0.1:5000/send-email", emailData, {
+                const response = await axios.post("https://kvqa-data-management-application.onrender.com/send-email", emailData, {
                     headers: { "Content-Type": "multipart/form-data" },
                 });
 
@@ -363,7 +364,8 @@
     reportEmailData.append("attachments", this.stage1Report);
 
     try {
-        const response = await axios.post("http://127.0.0.1:5000/send-email", reportEmailData, {
+        // const response = await axios.post("http://127.0.0.1:5000/send-email", reportEmailData, {
+        const response = await axios.post("https://kvqa-data-management-application.onrender.com/send-email", reportEmailData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 

@@ -259,7 +259,8 @@
       throw new Error("No authentication token found. Please log in again.");
     }
 
-    const response = await axios.get("http://127.0.0.1:5000/dashboard", {
+    // const response = await axios.get("http://127.0.0.1:5000/dashboard", {
+    const response = await axios.get("https://kvqa-data-management-application.onrender.com/dashboard", {
       headers: {
         Authorization: `Bearer ${token}`, // Attach the token in the request header
       },
@@ -298,7 +299,8 @@
             throw new Error("No authentication token found. Please log in again.");
         }
 
-        await axios.delete(`http://127.0.0.1:5000/dashboard/${id}`, {
+        // await axios.delete(`http://127.0.0.1:5000/dashboard/${id}`, {
+        await axios.delete(`https://kvqa-data-management-application.onrender.com/dashboard/${id}`, {
             headers: {
                 Authorization: `Bearer ${token}`, // Attach token in the request header
             },
@@ -326,7 +328,8 @@ async searchApplications() {
           throw new Error("No authentication token found. Please log in again.");
         }
 
-        const response = await axios.get("http://127.0.0.1:5000/search", {
+        // const response = await axios.get("http://127.0.0.1:5000/search", {
+        const response = await axios.get("https://kvqa-data-management-application.onrender.com/search", {
           headers: { Authorization: `Bearer ${token}` },
           params: {
             org_name: this.organisationName.trim(),

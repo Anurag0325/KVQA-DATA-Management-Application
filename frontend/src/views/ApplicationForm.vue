@@ -167,7 +167,8 @@ export default {
       return;
     }
 
-    const response = await axios.post("http://127.0.0.1:5000/dashboard", applicationData, {
+    // const response = await axios.post("http://127.0.0.1:5000/dashboard", applicationData, {
+    const response = await axios.post("https://kvqa-data-management-application.onrender.com/dashboard", applicationData, {
       headers: { 
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}` // ✅ Add JWT token here

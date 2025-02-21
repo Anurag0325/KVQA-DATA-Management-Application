@@ -28,7 +28,8 @@
     methods: {
       async login() {
         try {
-          const response = await axios.post("http://127.0.0.1:5000/login", {
+          // const response = await axios.post("http://127.0.0.1:5000/login", {
+          const response = await axios.post("https://kvqa-data-management-application.onrender.com/login", {
             email: this.email,
             password: this.password
           });
